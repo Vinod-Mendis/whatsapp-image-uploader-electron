@@ -572,19 +572,37 @@ async function getInitialImages(folderPath) {
   }
 }
 
-// ── Retry loop — re-checks waiting files every 10 s ─────────────────────────
-
 async function retryWaiting() {
-  if (waitingFiles.size === 0) return;
-  log('info', `🔁 Retrying ${waitingFiles.size} waiting file(s)…`);
-  for (const [imageId, filePath] of waitingFiles.entries()) {
-    if (processingSet.has(imageId)) continue;   // already in flight
-    if (!fs.existsSync(filePath)) {
-      log('warn', `🗑️  Waiting file gone: ${filePath}`, imageId);
-      waitingFiles.delete(imageId);
-      continue;
+  if (waitingFiles.size === 0 || !usersCollection || !dbConnected) return;
+
+  try {
+    const waitingIds = Array.from(waitingFiles.keys());
+
+    // Query MongoDB for all waiting IDs in ONE query to see if any now have a phone number
+    const claimedDocs = await usersCollection.find({
+      imageId: { $in: waitingIds },
+      phone: { $exists: true, $ne: null }
+    }).toArray();
+
+    if (claimedDocs.length === 0) return;
+
+    log('info', `🔁 Found ${claimedDocs.length} newly claimed image(s). Enqueuing...`);
+
+    // Enqueue only the photos that were actually claimed
+    for (const doc of claimedDocs) {
+      const filePath = waitingFiles.get(doc.imageId);
+      
+      if (processingSet.has(doc.imageId)) continue; // skip if already processing
+
+      if (filePath && fs.existsSync(filePath)) {
+        enqueueImage(filePath);
+      } else {
+        log('warn', `🗑️ File gone: ${filePath}`, doc.imageId);
+        waitingFiles.delete(doc.imageId);
+      }
     }
-    enqueueImage(filePath);                      // Queue the retry file
+  } catch (err) {
+    log('error', `⚠️ Error in retry check: ${err.message}`);
   }
 }
 
