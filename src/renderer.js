@@ -3,6 +3,7 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 let selectedFolder  = null;
 let isWatching      = false;
+let activeFrame     = null;
 const imageCards    = new Map(); // imageId → card element
 const cardFilePaths = new Map(); // imageId → filePath (for manual send)
 const cardPhones    = new Map(); // imageId → phone number (for search)
@@ -204,9 +205,17 @@ function upsertCard(imageId, status, extra = {}) {
   const previewEl  = document.getElementById(`cp-${imageId}`);
   if (previewEl) {
     if (isSendable && cardFilePaths.has(imageId)) {
-      previewEl.classList.add('card-preview-clickable');
-      previewEl.title = '📲 Click to send manually';
-      previewEl.onclick = () => openManualModal(imageId);
+      if (!activeFrame) {
+        previewEl.classList.remove('card-preview-clickable');
+        previewEl.title = '⚠️ Please select an active frame first';
+        previewEl.onclick = () => {
+          alert('⚠️ Please select an active frame in the "Frames" tab first before sending!');
+        };
+      } else {
+        previewEl.classList.add('card-preview-clickable');
+        previewEl.title = '📲 Click to send manually';
+        previewEl.onclick = () => openManualModal(imageId);
+      }
     } else {
       previewEl.classList.remove('card-preview-clickable');
       previewEl.title = '';
@@ -225,6 +234,32 @@ function upsertCard(imageId, status, extra = {}) {
 
   // Re-apply current tab filter (in case a card's status changed and needs to be hidden)
   applySearch();
+}
+
+function updateCardActions() {
+  for (const [imageId, card] of imageCards.entries()) {
+    const previewEl = document.getElementById(`cp-${imageId}`);
+    if (previewEl && cardFilePaths.has(imageId)) {
+      const isCompleted = card.classList.contains('completed');
+      const isFailed    = card.classList.contains('failed');
+      const isNoMatch   = card.classList.contains('no-match');
+      const isSendable  = isCompleted || isFailed || isNoMatch;
+
+      if (isSendable) {
+        if (!activeFrame) {
+          previewEl.classList.remove('card-preview-clickable');
+          previewEl.title = '⚠️ Please select an active frame first';
+          previewEl.onclick = () => {
+            alert('⚠️ Please select an active frame in the "Frames" tab first before sending!');
+          };
+        } else {
+          previewEl.classList.add('card-preview-clickable');
+          previewEl.title = '📲 Click to send manually';
+          previewEl.onclick = () => openManualModal(imageId);
+        }
+      }
+    }
+  }
 }
 
 
@@ -288,17 +323,29 @@ function openManualModal(imageId) {
   activeManualImageId = imageId;
   modalPhotoIdTxt.textContent = imageId;
   modalPhoneInput.value = '';
-  modalError.style.display = 'none';
-  modalSendBtn.disabled = false;
-  modalSendBtn.textContent = '✨ Upload & Send';
 
   // Show the current thumbnail in the modal
   const previewEl = document.getElementById(`cp-${imageId}`);
   const thumbImg  = previewEl?.querySelector('img');
   modalPreviewImg.src = thumbImg?.src || '';
 
+  if (!activeFrame) {
+    modalError.textContent = '⚠️ Please select an active frame in the "Frames" tab first.';
+    modalError.style.display = 'block';
+    modalSendBtn.disabled = true;
+    modalSendBtn.textContent = '✨ Upload & Send (Disabled)';
+    modalPhoneInput.disabled = true;
+  } else {
+    modalError.style.display = 'none';
+    modalSendBtn.disabled = false;
+    modalSendBtn.textContent = '✨ Upload & Send';
+    modalPhoneInput.disabled = false;
+  }
+
   manualModal.style.display = 'flex';
-  setTimeout(() => modalPhoneInput.focus(), 50);
+  if (activeFrame) {
+    setTimeout(() => modalPhoneInput.focus(), 50);
+  }
 }
 
 function closeManualModal() {
@@ -497,6 +544,14 @@ btnToggleLog.addEventListener('click', () => {
     refreshStats();
   }
 
+  // Get active frame status on start
+  try {
+    const { activeFrame: initialActiveFrame } = await window.api.getFrames();
+    activeFrame = initialActiveFrame;
+  } catch (err) {
+    console.warn('Failed to get initial active frame:', err);
+  }
+
   // Restore last-used folder from config
   const saved = await window.api.getSavedFolder();
   if (saved) {
@@ -506,6 +561,7 @@ btnToggleLog.addEventListener('click', () => {
     appendLog({ level: 'info', message: `📁 Restored folder: ${saved}`, ts: new Date().toISOString() });
   }
 
+  updateCardActions();
   appendLog({ level: 'info', message: '🚀 WhatsApp Booth Uploader ready', ts: new Date().toISOString() });
 })();
 
@@ -544,7 +600,8 @@ if (btnUploadFrame) {
 
 async function loadFrames() {
   if (!framesList) return;
-  const { frames, activeFrame, framesDir } = await window.api.getFrames();
+  const { frames, activeFrame: backendActiveFrame, framesDir } = await window.api.getFrames();
+  activeFrame = backendActiveFrame;
   framesList.innerHTML = '';
   
   if (frames.length === 0) {
@@ -554,6 +611,7 @@ async function loadFrames() {
         <p>No frames uploaded yet.</p>
       </div>
     `;
+    updateCardActions();
     return;
   }
   
@@ -595,5 +653,6 @@ async function loadFrames() {
     
     framesList.appendChild(card);
   });
+  updateCardActions();
 }
 

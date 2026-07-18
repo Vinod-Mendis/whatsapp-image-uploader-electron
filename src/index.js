@@ -570,7 +570,10 @@ ipcMain.handle('manual-send', async (_, { filePath, phone, imageId }) => {
     }
 
     const tempFile = await applyActiveFrame(filePath, imageId);
-    const uploadPath = tempFile || filePath;
+    if (!tempFile) {
+      throw new Error('No active frame selected or failed to apply the frame template.');
+    }
+    const uploadPath = tempFile;
 
     // Upload to Cloudflare R2
     const imageUrl = await uploadToCloudflare(uploadPath, `manual_${imageId}`);
