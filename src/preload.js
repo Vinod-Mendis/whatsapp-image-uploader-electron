@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('api', {
   manualSend:    (data)       => ipcRenderer.invoke('manual-send', data),
   deleteImage:   (imageId)    => ipcRenderer.invoke('delete-image', imageId),
 
+  // Event Config
+  getEventConfig:  ()           => ipcRenderer.invoke('get-event-config'),
+  saveEventConfig: (data)       => ipcRenderer.invoke('save-event-config', data),
+
   // Info / control
   getDbStatus:   ()           => ipcRenderer.invoke('get-db-status'),
   getStats:      ()           => ipcRenderer.invoke('get-stats'),

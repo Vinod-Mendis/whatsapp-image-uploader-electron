@@ -951,4 +951,13 @@ body { display: flex; }
   margin-top: 3px;
 }
 
+/* Perfect Center Gutter for Empty States */
+.queue-list:has(.empty-state) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 400px;
+}
+
 

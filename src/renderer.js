@@ -9,6 +9,7 @@ const cardFilePaths = new Map(); // imageId → filePath (for manual send)
 const cardPhones    = new Map(); // imageId → phone number (for search)
 let queueCount      = 0;
 let currentTab      = 'all';     // 'all' | 'sent' | 'not-sent'
+let eventCreated    = false;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const folderPathText  = document.getElementById('folder-path-text');
@@ -34,6 +35,16 @@ const statFailed      = document.getElementById('stat-failed');
 function fmtTs(iso) {
   const d = new Date(iso);
   return d.toLocaleTimeString('en-US', { hour12: false });
+}
+
+function formatUserCode(imageId) {
+  if (!imageId) return '';
+  // Match prefix + 8-digits date + 4-digits code (e.g. CMB202607181024)
+  const match = imageId.match(/^([A-Z]+)(\d{8})(\d{4})$/i);
+  if (match) {
+    return `${match[1]}${match[3]}`;
+  }
+  return imageId;
 }
 
 function statusIcon(status) {
@@ -85,7 +96,7 @@ function appendLog({ level, message, imageId, ts }) {
   if (imageId) {
     const idEl = document.createElement('span');
     idEl.className = 'log-id';
-    idEl.textContent = `[${imageId}]`;
+    idEl.textContent = `[${formatUserCode(imageId)}]`;
     line.appendChild(idEl);
   }
 
@@ -115,12 +126,7 @@ async function loadImagesList(folderPath) {
     queueCountBadge.textContent = '0';
 
     if (images.length === 0) {
-      queueList.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">🖼️</div>
-          <p>Waiting for images…<br/>Start watching a folder to begin.</p>
-        </div>
-      `;
+      updateEmptyState();
     } else {
       // images array is sorted oldest-first.
       // Since upsertCard prepends, looping oldest-to-newest will result in the newest being at the top.
@@ -139,6 +145,33 @@ async function loadImagesList(folderPath) {
         loader.style.display = 'none';
       }, 300);
     }
+  }
+}
+
+function updateEmptyState() {
+  if (imageCards.size > 0) return;
+  
+  if (!eventCreated) {
+    queueList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon" style="font-size: 40px; margin-bottom: 8px;">📅</div>
+        <p style="font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-bottom: 16px; max-width: 320px; line-height: 1.6;">No event configured.<br/>Please create an event to start.</p>
+        <button class="btn btn-primary" id="btn-create-event-central" style="-webkit-app-region: no-drag;">Create Event</button>
+      </div>
+    `;
+    
+    // Bind click to the central button
+    const btnCentral = document.getElementById('btn-create-event-central');
+    if (btnCentral) {
+      btnCentral.onclick = openEventModal;
+    }
+  } else {
+    queueList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">🖼️</div>
+        <p>Waiting for images…<br/>Start watching a folder to begin.</p>
+      </div>
+    `;
   }
 }
 
@@ -162,7 +195,7 @@ function upsertCard(imageId, status, extra = {}) {
         <span class="card-status-badge" id="ci-${imageId}">${statusIcon(status)}</span>
       </div>
       <div class="card-footer">
-        <div class="card-id">${imageId}</div>
+        <div class="card-id">${formatUserCode(imageId)}</div>
         <div class="card-user" id="cu-${imageId}"></div>
         <div class="card-step" id="cs-${imageId}">${statusLabel(status)}</div>
         <div class="card-status-pill-wrap">
@@ -378,7 +411,7 @@ let activeManualImageId = null;
 
 function openManualModal(imageId) {
   activeManualImageId = imageId;
-  modalPhotoIdTxt.textContent = imageId;
+  modalPhotoIdTxt.textContent = formatUserCode(imageId);
   modalPhoneInput.value = '';
 
   // Show the complete image with better quality (local file:// URL)
@@ -476,7 +509,7 @@ let activeDeleteImageId = null;
 
 function openDeleteModal(imageId) {
   activeDeleteImageId = imageId;
-  deletePhotoIdTxt.textContent = imageId;
+  deletePhotoIdTxt.textContent = formatUserCode(imageId);
 
   // Populate phone or display 'No user registered'
   const phone = cardPhones.get(imageId);
@@ -530,12 +563,7 @@ deleteModalConfirm.addEventListener('click', async () => {
       
       // Show empty state if queue is now empty
       if (imageCards.size === 0) {
-        queueList.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">🖼️</div>
-            <p>Waiting for images…<br/>Start watching a folder to begin.</p>
-          </div>
-        `;
+        updateEmptyState();
       }
       
       refreshStats();
@@ -550,6 +578,91 @@ deleteModalConfirm.addEventListener('click', async () => {
   }
 });
 
+// ── Event Creation Modal ─────────────────────────────────────────────────────────
+
+const eventModal         = document.getElementById('event-modal');
+const eventModalTitle    = document.getElementById('event-modal-title');
+const eventModalPrefix   = document.getElementById('event-modal-prefix');
+const eventModalError    = document.getElementById('event-modal-error');
+const eventModalCancel   = document.getElementById('event-modal-cancel');
+const eventModalConfirm  = document.getElementById('event-modal-confirm');
+
+const eventActiveCard    = document.getElementById('event-active-card');
+const sidebarEventPrefix = document.getElementById('sidebar-event-prefix');
+const sidebarEventTitle  = document.getElementById('sidebar-event-title');
+
+function updateSidebarEvent(eventName, eventPrefix) {
+  if (eventCreated && eventName && eventPrefix) {
+    sidebarEventPrefix.textContent = eventPrefix.toUpperCase();
+    sidebarEventTitle.textContent = eventName;
+    eventActiveCard.style.display = 'flex';
+  } else {
+    eventActiveCard.style.display = 'none';
+  }
+}
+
+async function openEventModal() {
+  eventModalError.style.display = 'none';
+  eventModalError.textContent = '';
+  
+  // Pre-populate with currently saved event config if available
+  try {
+    const config = await window.api.getEventConfig();
+    eventModalTitle.value = config.eventName || '';
+    eventModalPrefix.value = config.eventPrefix || '';
+  } catch (_) {}
+
+  eventModal.style.display = 'flex';
+  setTimeout(() => eventModalTitle.focus(), 50);
+}
+
+function closeEventModal() {
+  eventModal.style.display = 'none';
+}
+
+eventModalCancel.addEventListener('click', closeEventModal);
+eventModal.addEventListener('click', (e) => { if (e.target === eventModal) closeEventModal(); });
+
+eventModalConfirm.addEventListener('click', async () => {
+  const eventName = eventModalTitle.value.trim();
+  const eventPrefix = eventModalPrefix.value.trim().toUpperCase();
+
+  if (!eventName || !eventPrefix) {
+    eventModalError.textContent = 'Please fill out both Event Title and Prefix.';
+    eventModalError.style.display = 'block';
+    return;
+  }
+
+  eventModalError.style.display = 'none';
+  eventModalConfirm.disabled = true;
+  eventModalConfirm.textContent = 'Creating...';
+
+  try {
+    await window.api.saveEventConfig({ eventName, eventPrefix });
+    eventCreated = true;
+    
+    // Enable watch button if a folder is selected
+    if (selectedFolder) {
+      btnWatch.disabled = false;
+    }
+
+    // Update empty state view
+    updateEmptyState();
+
+    // Update sidebar display
+    updateSidebarEvent(eventName, eventPrefix);
+
+    appendLog({ level: 'info', message: `📅 Event configured: "${eventName}" [${eventPrefix}]`, ts: new Date().toISOString() });
+    closeEventModal();
+  } catch (err) {
+    eventModalError.textContent = `Failed to save: ${err.message}`;
+    eventModalError.style.display = 'block';
+  } finally {
+    eventModalConfirm.disabled = false;
+    eventModalConfirm.textContent = 'Create';
+  }
+});
+
 // ── Button handlers ───────────────────────────────────────────────────────────
 
 btnSelect.addEventListener('click', async () => {
@@ -557,7 +670,7 @@ btnSelect.addEventListener('click', async () => {
   if (!folder) return;
   selectedFolder = folder;
   folderPathText.textContent = folder;
-  btnWatch.disabled = false;
+  btnWatch.disabled = !eventCreated;
   appendLog({ level: 'info', message: `Folder selected: ${folder}`, ts: new Date().toISOString() });
   await loadImagesList(folder);
 });
@@ -701,12 +814,26 @@ btnToggleLog.addEventListener('click', () => {
     console.warn('Failed to get initial active frame:', err);
   }
 
+  // Load Event Config on startup
+  try {
+    const eventConfig = await window.api.getEventConfig();
+    if (eventConfig && eventConfig.eventName && eventConfig.eventPrefix) {
+      eventCreated = true;
+      updateSidebarEvent(eventConfig.eventName, eventConfig.eventPrefix);
+    }
+  } catch (err) {
+    console.warn('Failed to load event config:', err);
+  }
+
+  // Update empty state on startup
+  updateEmptyState();
+
   // Restore last-used folder from config
   const saved = await window.api.getSavedFolder();
   if (saved) {
     selectedFolder = saved;
     folderPathText.textContent = saved;
-    btnWatch.disabled = false;
+    btnWatch.disabled = !(selectedFolder && eventCreated);
     appendLog({ level: 'info', message: `📁 Restored folder: ${saved}`, ts: new Date().toISOString() });
 
     // Load initial images

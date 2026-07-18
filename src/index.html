@@ -20,6 +20,15 @@
         </div>
       </div>
 
+      <!-- Active Event Info -->
+      <div class="status-card" id="event-active-card" style="display: none; border-color: rgba(108,99,255,.25); margin-bottom: 2px;">
+        <span class="logo-icon" style="font-size: 16px; line-height: 1;">📅</span>
+        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          <div class="status-label" id="sidebar-event-prefix" style="color: var(--accent); font-weight: 700; font-size: 11px;">—</div>
+          <div class="status-value" id="sidebar-event-title" style="font-size: 10px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; margin-top: 2px;">—</div>
+        </div>
+      </div>
+
       <!-- DB Status -->
       <div class="status-card" id="db-card">
         <div class="status-dot" id="db-dot"></div>
@@ -114,8 +123,9 @@
           </div>
           <div class="queue-list" id="queue-list">
             <div class="empty-state">
-              <div class="empty-icon">🖼️</div>
-              <p>Waiting for images…<br/>Start watching a folder to begin.</p>
+              <div class="empty-icon" style="font-size: 40px; margin-bottom: 8px;">📅</div>
+              <p style="font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-bottom: 16px; max-width: 320px; line-height: 1.6;">No event configured.<br/>Please create an event to start.</p>
+              <button class="btn btn-primary" id="btn-create-event-central" style="-webkit-app-region: no-drag;">Create Event</button>
             </div>
           </div>
         </section>
@@ -199,6 +209,37 @@
         <div class="modal-footer" style="padding: 0 24px 24px; background: transparent;">
           <button class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
           <button class="btn btn-danger" id="delete-modal-confirm">Delete Photo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Create Event Modal ────────────────────────────────────────── -->
+    <div class="modal-overlay" id="event-modal" style="display:none">
+      <div class="modal-box delete-modal-box">
+        <div class="modal-body" style="padding: 24px 24px 16px;">
+          <div class="delete-warning-header" style="margin-bottom: 20px;">
+            <span class="warning-icon" style="background: rgba(108,99,255,.1); color: var(--accent);">📅</span>
+            <div>
+              <h3 class="delete-warning-title">Create New Event</h3>
+              <p class="delete-warning-desc">Setup event title and prefix to start watching</p>
+            </div>
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+            <label class="modal-label" for="event-modal-title">Event Title</label>
+            <input type="text" id="event-modal-title" class="modal-input" placeholder="e.g. Colombo Event" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 10px 12px; font-size: 13px; outline: none;" />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+            <label class="modal-label" for="event-modal-prefix">Event Prefix</label>
+            <input type="text" id="event-modal-prefix" class="modal-input" placeholder="e.g. CMB" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 10px 12px; font-size: 13px; outline: none; text-transform: uppercase;" />
+          </div>
+          
+          <div class="modal-error" id="event-modal-error" style="display:none; color: var(--error); font-size: 11px;"></div>
+        </div>
+        <div class="modal-footer" style="padding: 0 24px 24px; background: transparent;">
+          <button class="btn btn-secondary" id="event-modal-cancel">Cancel</button>
+          <button class="btn btn-primary" id="event-modal-confirm">Create</button>
         </div>
       </div>
     </div>

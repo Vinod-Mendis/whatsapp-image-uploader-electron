@@ -94,11 +94,45 @@ function isImage(filePath) {
   return IMAGE_EXTS.has(path.extname(filePath).toLowerCase());
 }
 
-/** Extract image ID: pull all digits from the filename, return the last 4 */
+function formatDateYYYYMMDD(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
+}
+
+/** Extract image ID: pull all digits from the filename, return prefix + YYYYMMDD + last 4 digits */
 function extractImageId(filePath) {
   const base   = path.basename(filePath, path.extname(filePath));
   const digits = base.replace(/\D/g, ''); // strip non-digits
-  return digits.slice(-4);               // last 4 digits
+  const last4 = digits.slice(-4) || '0000'; // fallback last 4 digits
+
+  const cfg = loadConfig();
+  const prefix = (cfg.eventPrefix || '').toUpperCase();
+  
+  // Format the date using the file modification time or current date
+  let dateStr = '';
+  try {
+    let resolvedPath = filePath;
+    if (!fs.existsSync(resolvedPath) && cfg.lastFolder) {
+      const altPath = path.join(cfg.lastFolder, filePath);
+      if (fs.existsSync(altPath)) {
+        resolvedPath = altPath;
+      }
+    }
+
+    if (fs.existsSync(resolvedPath)) {
+      const stats = fs.statSync(resolvedPath);
+      const date = stats.birthtime || stats.mtime || new Date();
+      dateStr = formatDateYYYYMMDD(date);
+    } else {
+      dateStr = formatDateYYYYMMDD(new Date());
+    }
+  } catch (_) {
+    dateStr = formatDateYYYYMMDD(new Date());
+  }
+
+  return `${prefix}${dateStr}${last4}`;
 }
 
 
@@ -636,6 +670,52 @@ ipcMain.handle('start-watch', async (_, folderPath) => {
 ipcMain.handle('get-saved-folder', () => {
   const cfg = loadConfig();
   return cfg.lastFolder || null;
+});
+
+ipcMain.handle('get-event-config', () => {
+  const cfg = loadConfig();
+  return {
+    eventName: cfg.eventName || '',
+    eventPrefix: cfg.eventPrefix || '',
+  };
+});
+
+ipcMain.handle('save-event-config', async (_, data) => {
+  saveConfig({
+    eventName: data.eventName || '',
+    eventPrefix: data.eventPrefix || '',
+  });
+
+  // Try connecting if not connected
+  if (!dbConnected) {
+    try {
+      await connectMongo();
+    } catch (_) {}
+  }
+
+  // Sync to MongoDB event_config collection
+  if (dbConnected && mongoClient) {
+    try {
+      const db = mongoClient.db();
+      const configCol = db.collection('event_config');
+      await configCol.updateOne(
+        { _id: 'active_event' },
+        {
+          $set: {
+            eventName: data.eventName || '',
+            eventPrefix: data.eventPrefix || '',
+            updatedAt: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+      log('info', `💾 Synced event config to MongoDB: "${data.eventName}" [${data.eventPrefix}]`);
+    } catch (err) {
+      log('error', `⚠️ Failed to sync event config to MongoDB: ${err.message}`);
+    }
+  }
+
+  return { success: true };
 });
 
 ipcMain.handle('get-images', async (_, folderPath) => {
