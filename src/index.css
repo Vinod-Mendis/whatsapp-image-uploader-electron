@@ -287,6 +287,9 @@ body { display: flex; }
   flex-direction: column;
   transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
   animation: slideIn 0.25s ease;
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
 }
 .queue-card:hover {
   border-color: var(--border-glow);
