@@ -60,18 +60,6 @@ function statusLabel(status) {
   return map[status] || status;
 }
 
-function progressPct(status) {
-  const map = {
-    detected:   10,
-    processing: 40,
-    uploaded:   75,
-    completed:  100,
-    failed:     100,
-    'no-match': 100,
-  };
-  return map[status] ?? 0;
-}
-
 // ── Log ───────────────────────────────────────────────────────────────────────
 
 function appendLog({ level, message, imageId, ts }) {
@@ -112,6 +100,48 @@ function appendLog({ level, message, imageId, ts }) {
 
 // ── Queue cards ───────────────────────────────────────────────────────────────
 
+async function loadImagesList(folderPath) {
+  const loader = document.getElementById('loader-overlay');
+  if (loader) loader.style.display = 'flex';
+
+  try {
+    const images = await window.api.getImages(folderPath);
+
+    // Clear UI state
+    queueList.innerHTML = '';
+    imageCards.clear();
+    cardPhones.clear();
+    queueCount = 0;
+    queueCountBadge.textContent = '0';
+
+    if (images.length === 0) {
+      queueList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🖼️</div>
+          <p>Waiting for images…<br/>Start watching a folder to begin.</p>
+        </div>
+      `;
+    } else {
+      // images array is sorted oldest-first.
+      // Since upsertCard prepends, looping oldest-to-newest will result in the newest being at the top.
+      for (const item of images) {
+        upsertCard(item.imageId, item.status, item);
+      }
+    }
+    
+    refreshStats();
+  } catch (err) {
+    appendLog({ level: 'error', message: `Failed to load folder images: ${err.message}`, ts: new Date().toISOString() });
+  } finally {
+    if (loader) {
+      // Add a small delay for visual feedback/smooth transition
+      setTimeout(() => {
+        loader.style.display = 'none';
+      }, 300);
+    }
+  }
+}
+
 function removeEmptyState() {
   const es = queueList.querySelector('.empty-state');
   if (es) es.remove();
@@ -135,8 +165,10 @@ function upsertCard(imageId, status, extra = {}) {
         <div class="card-id">${imageId}</div>
         <div class="card-user" id="cu-${imageId}"></div>
         <div class="card-step" id="cs-${imageId}">${statusLabel(status)}</div>
-        <div class="progress-bar-wrap">
-          <div class="progress-bar" id="cpb-${imageId}" style="width:${progressPct(status)}%"></div>
+        <div class="card-status-pill-wrap">
+          <span class="status-pill ${status === 'completed' ? 'pill-sent' : 'pill-not-sent'}" id="cpill-${imageId}">
+            ${status === 'completed' ? 'Sent' : 'Not Sent'}
+          </span>
         </div>
       </div>
     `;
@@ -153,8 +185,16 @@ function upsertCard(imageId, status, extra = {}) {
     if (badgeEl) badgeEl.textContent = statusIcon(status);
     const stepEl = document.getElementById(`cs-${imageId}`);
     if (stepEl) stepEl.textContent = statusLabel(status);
-    const pb = document.getElementById(`cpb-${imageId}`);
-    if (pb) pb.style.width = `${progressPct(status)}%`;
+    const pill = document.getElementById(`cpill-${imageId}`);
+    if (pill) {
+      if (status === 'completed') {
+        pill.className = 'status-pill pill-sent';
+        pill.textContent = 'Sent';
+      } else {
+        pill.className = 'status-pill pill-not-sent';
+        pill.textContent = 'Not Sent';
+      }
+    }
   }
 
   // Set preview thumbnail if provided
@@ -201,7 +241,7 @@ function upsertCard(imageId, status, extra = {}) {
   }
 
   // Make preview clickable for no-match / failed / completed cards (re-send)
-  const isSendable = (status === 'no-match' || status === 'failed' || status === 'completed');
+  const isSendable = (status === 'no-match' || status === 'failed' || status === 'completed' || status === 'pending' || status === 'uploaded');
   const previewEl  = document.getElementById(`cp-${imageId}`);
   if (previewEl) {
     if (isSendable && cardFilePaths.has(imageId)) {
@@ -243,7 +283,9 @@ function updateCardActions() {
       const isCompleted = card.classList.contains('completed');
       const isFailed    = card.classList.contains('failed');
       const isNoMatch   = card.classList.contains('no-match');
-      const isSendable  = isCompleted || isFailed || isNoMatch;
+      const isPending   = card.classList.contains('pending');
+      const isUploaded  = card.classList.contains('uploaded');
+      const isSendable  = isCompleted || isFailed || isNoMatch || isPending || isUploaded;
 
       if (isSendable) {
         if (!activeFrame) {
@@ -417,6 +459,7 @@ btnSelect.addEventListener('click', async () => {
   folderPathText.textContent = folder;
   btnWatch.disabled = false;
   appendLog({ level: 'info', message: `Folder selected: ${folder}`, ts: new Date().toISOString() });
+  await loadImagesList(folder);
 });
 
 btnWatch.addEventListener('click', async () => {
@@ -427,6 +470,7 @@ btnWatch.addEventListener('click', async () => {
   btnWatch.style.display = 'none';
   btnStop.style.display  = 'inline-flex';
   appendLog({ level: 'info', message: '👁️  Watching started', ts: new Date().toISOString() });
+  await loadImagesList(selectedFolder);
 });
 
 btnStop.addEventListener('click', async () => {
@@ -564,6 +608,9 @@ btnToggleLog.addEventListener('click', () => {
     folderPathText.textContent = saved;
     btnWatch.disabled = false;
     appendLog({ level: 'info', message: `📁 Restored folder: ${saved}`, ts: new Date().toISOString() });
+
+    // Load initial images
+    await loadImagesList(saved);
 
     // Sync UI if the backend is already watching the folder (e.g. after a page reload)
     const isAlreadyWatching = await window.api.isWatching();

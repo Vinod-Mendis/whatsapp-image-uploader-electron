@@ -212,6 +212,7 @@ body { display: flex; }
 }
 
 .panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
@@ -377,12 +378,30 @@ body { display: flex; }
 .card-step { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 .card-url  { font-size: 10px; color: var(--accent); margin-top: 4px; word-break: break-all; }
 
-.progress-bar-wrap {
-  height: 3px;
-  background: var(--bg-elevated);
-  border-radius: 2px;
+.card-status-pill-wrap {
   margin-top: 8px;
-  overflow: hidden;
+  display: flex;
+}
+
+.status-pill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-pill.pill-sent {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-pill.pill-not-sent {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 /* Active frame state */
@@ -390,12 +409,6 @@ body { display: flex; }
 .queue-card.frame-card.active-frame {
   border: 2px solid var(--accent);
   box-shadow: 0 0 12px var(--accent-glow);
-}
-.progress-bar {
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--processing));
-  border-radius: 2px;
-  transition: width 0.4s ease;
 }
 
 /* ─── Log ─────────────────────────────────────────────────────────────── */
@@ -766,4 +779,42 @@ body { display: flex; }
   padding: 0 20px 20px;
   justify-content: flex-end;
 }
+
+/* Loader Overlay & Spinner */
+.loader-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 100; /* overlay above everything in the panel */
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--bg-elevated);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loader-text {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
 

@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   startWatch:    (folderPath) => ipcRenderer.invoke('start-watch', folderPath),
   stopWatch:     ()           => ipcRenderer.invoke('stop-watch'),
   getSavedFolder:()           => ipcRenderer.invoke('get-saved-folder'),
+  getImages:     (folderPath) => ipcRenderer.invoke('get-images', folderPath),
   isWatching:    ()           => ipcRenderer.invoke('is-watching'),
 
   // Manual send (no DB user)

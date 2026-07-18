@@ -44,6 +44,8 @@ let retryTimer  = null;                        // interval id for the retry loop
 const processingSet = new Set();
 // Files that arrived before a matching user registered — retried every 10 s
 const waitingFiles  = new Map();               // imageId → filePath
+const uploadQueue   = [];                      // sequential queue for files to process
+let queueProcessing = false;                   // flag indicating if queue is currently processing
 
 // ── Config persistence ────────────────────────────────────────────────────────
 // Stored in: ~/Library/Application Support/<appName>/config.json  (macOS)
@@ -266,6 +268,50 @@ async function applyActiveFrame(filePath, imageId) {
   }
 }
 
+// ── Queue System ──────────────────────────────────────────────────────────────
+
+function enqueueImage(filePath) {
+  const imageId = extractImageId(filePath);
+
+  // Check if this imageId is already being processed
+  if (processingSet.has(imageId)) {
+    log('info', `⏭️  Skip queuing ${imageId} — already processing`, imageId);
+    return;
+  }
+
+  // Check if this file is already in the queue
+  if (uploadQueue.includes(filePath)) {
+    return;
+  }
+
+  // Check if another file with the same imageId is already in the queue
+  const isIdQueued = uploadQueue.some(queuedPath => extractImageId(queuedPath) === imageId);
+  if (isIdQueued) {
+    log('info', `⏭️  Skip queuing ${imageId} — already queued`, imageId);
+    return;
+  }
+
+  uploadQueue.push(filePath);
+  log('info', `📥 Queued file: ${path.basename(filePath)} (Queue size: ${uploadQueue.length})`);
+  triggerQueueProcessing();
+}
+
+async function triggerQueueProcessing() {
+  if (queueProcessing) return;
+  queueProcessing = true;
+
+  while (uploadQueue.length > 0) {
+    const nextPath = uploadQueue.shift();
+    try {
+      await processImage(nextPath);
+    } catch (err) {
+      log('error', `❌ Queue error processing ${nextPath}: ${err.message}`);
+    }
+  }
+
+  queueProcessing = false;
+}
+
 // ── Core pipeline ─────────────────────────────────────────────────────────────
 
 async function processImage(filePath) {
@@ -274,6 +320,28 @@ async function processImage(filePath) {
   if (processingSet.has(imageId)) {
     log('info', `⏭️  Already processing ${imageId}, skipping`);
     return;
+  }
+
+  // Fast pre-check: if already completed in DB, skip debounce sleep and return immediately
+  if (usersCollection && dbConnected) {
+    try {
+      const doc = await usersCollection.findOne({ imageId });
+      if (doc && doc.status === 'completed') {
+        log('info', `⏭️  imageId "${imageId}" already completed — skipping lookup`, imageId);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('image-status', {
+            imageId,
+            status:   doc.status,
+            imageUrl: doc.imageUrl || undefined,
+            phone:    doc.phone    || undefined,
+            filePath,
+          });
+        }
+        return;
+      }
+    } catch (err) {
+      log('warn', `⚠️ DB pre-check lookup failed for ${imageId}: ${err.message}`);
+    }
   }
 
   // Small debounce – wait for file write to complete
@@ -312,6 +380,7 @@ async function processImage(filePath) {
           status:   doc.status,
           imageUrl: doc.imageUrl || undefined,
           phone:    doc.phone    || undefined,
+          filePath,
         });
       }
       processingSet.delete(imageId);
@@ -403,6 +472,63 @@ async function processImage(filePath) {
   }
 }
 
+// Function to scan local folder and cross-reference with DB status in batch
+async function getInitialImages(folderPath) {
+  if (!fs.existsSync(folderPath)) return [];
+  try {
+    const files = fs.readdirSync(folderPath);
+    const imageFiles = files.filter(f => isImage(path.join(folderPath, f)));
+    const ids = imageFiles.map(f => extractImageId(f));
+
+    let dbRecords = [];
+    if (usersCollection && dbConnected && ids.length > 0) {
+      dbRecords = await usersCollection.find({ imageId: { $in: ids } }).toArray();
+    }
+    const dbMap = new Map(dbRecords.map(r => [r.imageId, r]));
+
+    const list = [];
+    for (const file of imageFiles) {
+      const filePath = path.join(folderPath, file);
+      const imageId = extractImageId(filePath);
+      const doc = dbMap.get(imageId);
+      const stats = fs.statSync(filePath);
+
+      let previewUrl = null;
+      try {
+        const thumbBuffer = await sharp(filePath)
+          .rotate()
+          .resize(140)
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        previewUrl = `data:image/jpeg;base64,${thumbBuffer.toString('base64')}`;
+      } catch (_) {}
+
+      let status = 'detected';
+      if (doc) {
+        status = doc.status || 'detected';
+      } else {
+        status = 'no-match';
+      }
+
+      list.push({
+        imageId,
+        filePath,
+        status,
+        previewUrl,
+        imageUrl: doc?.imageUrl,
+        user: doc ? { name: doc.name, phone: doc.phone } : undefined,
+        mtime: stats.birthtimeMs || stats.mtimeMs
+      });
+    }
+
+    // Sort: oldest first (so when renderer prepends them, the newest ends up at the top)
+    return list.sort((a, b) => a.mtime - b.mtime);
+  } catch (err) {
+    log('error', `⚠️ Failed to get initial images: ${err.message}`);
+    return [];
+  }
+}
+
 // ── Retry loop — re-checks waiting files every 10 s ─────────────────────────
 
 async function retryWaiting() {
@@ -415,13 +541,13 @@ async function retryWaiting() {
       waitingFiles.delete(imageId);
       continue;
     }
-    processImage(filePath);                      // fire-and-forget; will clean up itself
+    enqueueImage(filePath);                      // Queue the retry file
   }
 }
 
 // ── Folder watching ───────────────────────────────────────────────────────────
 
-function startWatcher(folderPath) {
+async function startWatcher(folderPath) {
   if (watcher) {
     watcher.close();
     watcher = null;
@@ -431,8 +557,40 @@ function startWatcher(folderPath) {
     retryTimer = null;
   }
   waitingFiles.clear();
+  uploadQueue.length = 0;                        // Clear any pending queue items on start
 
   log('info', `👁️  Watching folder: ${folderPath}`);
+
+  // Populate waitingFiles with existing files that are not completed in MongoDB yet
+  try {
+    if (fs.existsSync(folderPath)) {
+      const files = fs.readdirSync(folderPath);
+      const imageFiles = files.filter(f => isImage(path.join(folderPath, f)));
+      const ids = imageFiles.map(f => extractImageId(f));
+
+      let dbRecords = [];
+      if (usersCollection && dbConnected && ids.length > 0) {
+        dbRecords = await usersCollection.find({ imageId: { $in: ids } }).toArray();
+      }
+      const dbMap = new Map(dbRecords.map(r => [r.imageId, r]));
+
+      for (const file of imageFiles) {
+        const filePath = path.join(folderPath, file);
+        const imageId = extractImageId(filePath);
+        const doc = dbMap.get(imageId);
+
+        // If file doesn't exist in DB, or it exists but isn't completed, add to retry queue
+        if (!doc || doc.status !== 'completed') {
+          waitingFiles.set(imageId, filePath);
+        }
+      }
+      if (waitingFiles.size > 0) {
+        log('info', `📥 Initialized retry queue with ${waitingFiles.size} unmatched/incomplete file(s)`);
+      }
+    }
+  } catch (err) {
+    log('error', `⚠️ Failed to initialize retry queue: ${err.message}`);
+  }
 
   // Retry any unmatched files every 10 seconds
   const RETRY_INTERVAL = parseInt(process.env.RETRY_INTERVAL_MS || '10000', 10);
@@ -442,7 +600,7 @@ function startWatcher(folderPath) {
   watcher = chokidar.watch(folderPath, {
     ignored: /(^|[/\\])\../,  // ignore dot-files
     persistent: true,
-    ignoreInitial: false,     // also process files already in folder
+    ignoreInitial: true,     // ignore initial scan as we already populated wait files and batch loaded
     awaitWriteFinish: {
       stabilityThreshold: 1000,
       pollInterval: 200,
@@ -451,7 +609,7 @@ function startWatcher(folderPath) {
 
   watcher
     .on('add', (filePath) => {
-      if (isImage(filePath)) processImage(filePath);
+      if (isImage(filePath)) enqueueImage(filePath);
     })
     .on('error', (err) => log('error', `Watcher error: ${err.message}`));
 }
@@ -471,7 +629,7 @@ ipcMain.handle('start-watch', async (_, folderPath) => {
   // Persist so it's restored on next launch
   saveConfig({ lastFolder: folderPath });
   await connectMongo();
-  startWatcher(folderPath);
+  await startWatcher(folderPath);
   return { success: true };
 });
 
@@ -480,12 +638,17 @@ ipcMain.handle('get-saved-folder', () => {
   return cfg.lastFolder || null;
 });
 
+ipcMain.handle('get-images', async (_, folderPath) => {
+  return await getInitialImages(folderPath);
+});
+
 ipcMain.handle('is-watching', () => watcher !== null);
 
 ipcMain.handle('stop-watch', () => {
   if (watcher) { watcher.close(); watcher = null; }
   if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
   waitingFiles.clear();
+  uploadQueue.length = 0;                        // Clear any pending queue items on stop
   log('info', '🛑 Watcher stopped');
   return { success: true };
 });
