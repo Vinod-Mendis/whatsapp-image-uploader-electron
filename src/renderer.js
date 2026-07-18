@@ -32,6 +32,10 @@ const statFailed      = document.getElementById('stat-failed');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function updateWatchButtonState() {
+  btnWatch.disabled = !(selectedFolder && eventCreated);
+}
+
 function fmtTs(iso) {
   const d = new Date(iso);
   return d.toLocaleTimeString('en-US', { hour12: false });
@@ -656,7 +660,7 @@ if (sidebarEventSelect) {
       try {
         await window.api.saveEventConfig({ eventName: '', eventPrefix: '' });
         eventCreated = false;
-        btnWatch.disabled = true;
+        updateWatchButtonState();
         updateEmptyState();
         appendLog({ level: 'info', message: '📂 Active event cleared', ts: new Date().toISOString() });
       } catch (err) {
@@ -673,9 +677,7 @@ if (sidebarEventSelect) {
       await window.api.saveEventConfig({ eventName, eventPrefix });
       eventCreated = true;
       
-      if (selectedFolder) {
-        btnWatch.disabled = false;
-      }
+      updateWatchButtonState();
       updateEmptyState();
       appendLog({ level: 'info', message: `📂 Switched active event to: "${eventName}" [${eventPrefix}]`, ts: new Date().toISOString() });
     } catch (err) {
@@ -728,13 +730,19 @@ eventCreateConfirm.addEventListener('click', async () => {
   eventCreateConfirm.textContent = 'Creating...';
 
   try {
+    // Fetch all events and check if the prefix already exists
+    const events = await window.api.getAllEvents();
+    const prefixExists = events.some(ev => ev.eventPrefix && ev.eventPrefix.toUpperCase() === eventPrefix);
+    if (prefixExists) {
+      eventCreateError.textContent = `Event prefix "${eventPrefix}" already exists. Please choose a different prefix.`;
+      eventCreateError.style.display = 'block';
+      return;
+    }
+
     await window.api.saveEventConfig({ eventName, eventPrefix });
     eventCreated = true;
     
-    // Enable watch button if a folder is selected
-    if (selectedFolder) {
-      btnWatch.disabled = false;
-    }
+    updateWatchButtonState();
 
     // Update empty state view
     updateEmptyState();
@@ -823,10 +831,7 @@ eventSelectConfirm.addEventListener('click', async () => {
     await window.api.saveEventConfig({ eventName, eventPrefix });
     eventCreated = true;
     
-    // Enable watch button if a folder is selected
-    if (selectedFolder) {
-      btnWatch.disabled = false;
-    }
+    updateWatchButtonState();
 
     // Update empty state view
     updateEmptyState();
@@ -852,7 +857,7 @@ btnSelect.addEventListener('click', async () => {
   if (!folder) return;
   selectedFolder = folder;
   folderPathText.textContent = folder;
-  btnWatch.disabled = !eventCreated;
+  updateWatchButtonState();
   appendLog({ level: 'info', message: `Folder selected: ${folder}`, ts: new Date().toISOString() });
   await loadImagesList(folder);
 });
@@ -1020,7 +1025,6 @@ btnToggleLog.addEventListener('click', () => {
   if (saved) {
     selectedFolder = saved;
     folderPathText.textContent = saved;
-    btnWatch.disabled = !(selectedFolder && eventCreated);
     appendLog({ level: 'info', message: `📁 Restored folder: ${saved}`, ts: new Date().toISOString() });
 
     // Load initial images
@@ -1037,6 +1041,7 @@ btnToggleLog.addEventListener('click', () => {
     }
   }
 
+  updateWatchButtonState();
   updateCardActions();
   appendLog({ level: 'info', message: '🚀 WhatsApp Booth Uploader ready', ts: new Date().toISOString() });
 })();

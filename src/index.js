@@ -715,18 +715,6 @@ ipcMain.handle('save-event-config', async (_, data) => {
           { upsert: true }
         );
 
-        // 2. Save/Update active event document
-        await configCol.updateOne(
-          { _id: 'active_event' },
-          {
-            $set: {
-              eventName,
-              eventPrefix,
-              updatedAt: new Date(),
-            },
-          },
-          { upsert: true }
-        );
         log('info', `💾 Synced event config to MongoDB: "${eventName}" [${eventPrefix}]`);
       }
     } catch (err) {
