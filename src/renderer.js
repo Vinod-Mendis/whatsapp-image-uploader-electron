@@ -324,21 +324,26 @@ function openManualModal(imageId) {
   modalPhotoIdTxt.textContent = imageId;
   modalPhoneInput.value = '';
 
-  // Show the current thumbnail in the modal
-  const previewEl = document.getElementById(`cp-${imageId}`);
-  const thumbImg  = previewEl?.querySelector('img');
-  modalPreviewImg.src = thumbImg?.src || '';
+  // Show the complete image with better quality (local file:// URL)
+  const filePath = cardFilePaths.get(imageId);
+  if (filePath) {
+    modalPreviewImg.src = `file://${filePath.replace(/\\/g, '/')}`;
+  } else {
+    const previewEl = document.getElementById(`cp-${imageId}`);
+    const thumbImg  = previewEl?.querySelector('img');
+    modalPreviewImg.src = thumbImg?.src || '';
+  }
 
   if (!activeFrame) {
-    modalError.textContent = '⚠️ Please select an active frame in the "Frames" tab first.';
+    modalError.textContent = 'Please select an active frame in the "Frames" tab first.';
     modalError.style.display = 'block';
     modalSendBtn.disabled = true;
-    modalSendBtn.textContent = '✨ Upload & Send (Disabled)';
+    modalSendBtn.textContent = 'Upload & Send (Disabled)';
     modalPhoneInput.disabled = true;
   } else {
     modalError.style.display = 'none';
     modalSendBtn.disabled = false;
-    modalSendBtn.textContent = '✨ Upload & Send';
+    modalSendBtn.textContent = 'Upload & Send';
     modalPhoneInput.disabled = false;
   }
 
@@ -360,20 +365,20 @@ manualModal.addEventListener('click', (e) => { if (e.target === manualModal) clo
 modalSendBtn.addEventListener('click', async () => {
   const phone = modalPhoneInput.value.trim();
   if (!phone) {
-    modalError.textContent = '⚠️ Please enter a WhatsApp number.';
+    modalError.textContent = 'Please enter a WhatsApp number.';
     modalError.style.display = 'block';
     return;
   }
   const cleaned = phone.replace(/\D/g, '');
   if (cleaned.length < 7 || cleaned.length > 15) {
-    modalError.textContent = '⚠️ Enter a valid number with country code (e.g. +94771234567).';
+    modalError.textContent = 'Enter a valid number with country code (e.g. +94771234567).';
     modalError.style.display = 'block';
     return;
   }
 
   modalError.style.display = 'none';
   modalSendBtn.disabled = true;
-  modalSendBtn.textContent = '⏳ Uploading…';
+  modalSendBtn.textContent = 'Uploading...';
 
   const imageId = activeManualImageId;
   const filePath = cardFilePaths.get(imageId);
@@ -391,10 +396,10 @@ modalSendBtn.addEventListener('click', async () => {
     appendLog({ level: 'info', message: `✅ Manually sent to ${phone}`, ts: new Date().toISOString() });
 
   } else {
-    modalError.textContent = `❌ ${result.error}`;
+    modalError.textContent = result.error;
     modalError.style.display = 'block';
     modalSendBtn.disabled = false;
-    modalSendBtn.textContent = '✨ Upload & Send';
+    modalSendBtn.textContent = 'Upload & Send';
   }
 });
 
