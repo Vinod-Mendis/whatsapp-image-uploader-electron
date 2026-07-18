@@ -698,24 +698,65 @@ ipcMain.handle('save-event-config', async (_, data) => {
     try {
       const db = mongoClient.db();
       const configCol = db.collection('event_config');
-      await configCol.updateOne(
-        { _id: 'active_event' },
-        {
-          $set: {
-            eventName: data.eventName || '',
-            eventPrefix: data.eventPrefix || '',
-            updatedAt: new Date(),
+      const eventPrefix = (data.eventPrefix || '').toUpperCase().trim();
+      const eventName = (data.eventName || '').trim();
+
+      if (eventPrefix && eventName) {
+        // 1. Save specific event document keyed by prefix
+        await configCol.updateOne(
+          { _id: eventPrefix },
+          {
+            $set: {
+              eventName,
+              eventPrefix,
+              updatedAt: new Date(),
+            },
           },
-        },
-        { upsert: true }
-      );
-      log('info', `💾 Synced event config to MongoDB: "${data.eventName}" [${data.eventPrefix}]`);
+          { upsert: true }
+        );
+
+        // 2. Save/Update active event document
+        await configCol.updateOne(
+          { _id: 'active_event' },
+          {
+            $set: {
+              eventName,
+              eventPrefix,
+              updatedAt: new Date(),
+            },
+          },
+          { upsert: true }
+        );
+        log('info', `💾 Synced event config to MongoDB: "${eventName}" [${eventPrefix}]`);
+      }
     } catch (err) {
       log('error', `⚠️ Failed to sync event config to MongoDB: ${err.message}`);
     }
   }
 
   return { success: true };
+});
+
+ipcMain.handle('get-all-events', async () => {
+  if (!dbConnected || !mongoClient) return [];
+  try {
+    const db = mongoClient.db();
+    const configCol = db.collection('event_config');
+    // Fetch all events except the active_event placeholder doc
+    const events = await configCol
+      .find({ _id: { $ne: 'active_event' } })
+      .sort({ updatedAt: -1 })
+      .toArray();
+    return events
+      .filter(e => e.eventName && e.eventPrefix)
+      .map(e => ({
+        eventName: e.eventName || '',
+        eventPrefix: e.eventPrefix || '',
+      }));
+  } catch (err) {
+    log('error', `⚠️ Failed to get all events: ${err.message}`);
+    return [];
+  }
 });
 
 ipcMain.handle('get-images', async (_, folderPath) => {

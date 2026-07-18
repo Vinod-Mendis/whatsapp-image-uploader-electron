@@ -155,16 +155,19 @@ function updateEmptyState() {
     queueList.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon" style="font-size: 40px; margin-bottom: 8px;">📅</div>
-        <p style="font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-bottom: 16px; max-width: 320px; line-height: 1.6;">No event configured.<br/>Please create an event to start.</p>
-        <button class="btn btn-primary" id="btn-create-event-central" style="-webkit-app-region: no-drag;">Create Event</button>
+        <p style="font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-bottom: 16px; max-width: 320px; line-height: 1.6;">No event configured.<br/>Please select an existing event or create a new one.</p>
+        <div style="display: flex; gap: 12px; justify-content: center; -webkit-app-region: no-drag;">
+          <button class="btn btn-secondary" id="btn-select-event-central">Select Event</button>
+          <button class="btn btn-primary" id="btn-create-event-central">Create Event</button>
+        </div>
       </div>
     `;
     
-    // Bind click to the central button
-    const btnCentral = document.getElementById('btn-create-event-central');
-    if (btnCentral) {
-      btnCentral.onclick = openEventModal;
-    }
+    // Bind click to the central buttons
+    const btnSelectCentral = document.getElementById('btn-select-event-central');
+    const btnCreateCentral = document.getElementById('btn-create-event-central');
+    if (btnSelectCentral) btnSelectCentral.onclick = openSelectEventModal;
+    if (btnCreateCentral) btnCreateCentral.onclick = openCreateEventModal;
   } else {
     queueList.innerHTML = `
       <div class="empty-state">
@@ -589,62 +592,140 @@ deleteModalConfirm.addEventListener('click', async () => {
 
 // ── Event Creation Modal ─────────────────────────────────────────────────────────
 
-const eventModal         = document.getElementById('event-modal');
-const eventModalTitle    = document.getElementById('event-modal-title');
-const eventModalPrefix   = document.getElementById('event-modal-prefix');
-const eventModalError    = document.getElementById('event-modal-error');
-const eventModalCancel   = document.getElementById('event-modal-cancel');
-const eventModalConfirm  = document.getElementById('event-modal-confirm');
+const sidebarEventSelect = document.getElementById('sidebar-event-select');
 
-const eventActiveCard    = document.getElementById('event-active-card');
-const sidebarEventPrefix = document.getElementById('sidebar-event-prefix');
-const sidebarEventTitle  = document.getElementById('sidebar-event-title');
-
-function updateSidebarEvent(eventName, eventPrefix) {
-  if (eventCreated && eventName && eventPrefix) {
-    sidebarEventPrefix.textContent = eventPrefix.toUpperCase();
-    sidebarEventTitle.textContent = eventName;
-    eventActiveCard.style.display = 'flex';
-  } else {
-    eventActiveCard.style.display = 'none';
+// Hides/disabled select when watching to prevent midway changes
+function updateSidebarSelectState() {
+  if (sidebarEventSelect) {
+    sidebarEventSelect.disabled = isWatching;
   }
 }
 
-async function openEventModal() {
-  eventModalError.style.display = 'none';
-  eventModalError.textContent = '';
-  
-  // Pre-populate with currently saved event config if available
+async function populateSidebarEvents() {
+  if (!sidebarEventSelect) return;
   try {
-    const config = await window.api.getEventConfig();
-    eventModalTitle.value = config.eventName || '';
-    eventModalPrefix.value = config.eventPrefix || '';
-  } catch (_) {}
+    // Preserve default choices
+    sidebarEventSelect.innerHTML = `
+      <option value="">-- No Active Event --</option>
+      <option value="__create_new__">+ Create New Event...</option>
+    `;
 
-  eventModal.style.display = 'flex';
-  setTimeout(() => eventModalTitle.focus(), 50);
+    const events = await window.api.getAllEvents();
+    if (events && events.length > 0) {
+      for (const ev of events) {
+        const opt = document.createElement('option');
+        opt.value = ev.eventPrefix;
+        opt.textContent = `${ev.eventName} (${ev.eventPrefix})`;
+        opt.setAttribute('data-name', ev.eventName);
+        sidebarEventSelect.appendChild(opt);
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load events for sidebar:', err);
+  }
 }
 
-function closeEventModal() {
-  eventModal.style.display = 'none';
+async function updateSidebarEvent(eventName, eventPrefix) {
+  await populateSidebarEvents();
+  if (eventCreated && eventName && eventPrefix) {
+    sidebarEventSelect.value = eventPrefix.toUpperCase();
+  } else {
+    sidebarEventSelect.value = '';
+  }
+  updateSidebarSelectState();
 }
 
-eventModalCancel.addEventListener('click', closeEventModal);
-eventModal.addEventListener('click', (e) => { if (e.target === eventModal) closeEventModal(); });
+// Handle change directly on sidebar dropdown selection
+if (sidebarEventSelect) {
+  sidebarEventSelect.addEventListener('change', async () => {
+    const val = sidebarEventSelect.value;
+    if (val === '__create_new__') {
+      openCreateEventModal();
+      // Reset sidebar selection back to empty or saved config
+      try {
+        const cfg = await window.api.getEventConfig();
+        sidebarEventSelect.value = cfg.eventPrefix ? cfg.eventPrefix.toUpperCase() : '';
+      } catch (_) {
+        sidebarEventSelect.value = '';
+      }
+      return;
+    }
 
-eventModalConfirm.addEventListener('click', async () => {
-  const eventName = eventModalTitle.value.trim();
-  const eventPrefix = eventModalPrefix.value.trim().toUpperCase();
+    if (!val) {
+      // Deactivate event config
+      try {
+        await window.api.saveEventConfig({ eventName: '', eventPrefix: '' });
+        eventCreated = false;
+        btnWatch.disabled = true;
+        updateEmptyState();
+        appendLog({ level: 'info', message: '📂 Active event cleared', ts: new Date().toISOString() });
+      } catch (err) {
+        alert(`Failed to clear event: ${err.message}`);
+      }
+      return;
+    }
+
+    const selectedOption = sidebarEventSelect.options[sidebarEventSelect.selectedIndex];
+    const eventPrefix = selectedOption.value;
+    const eventName = selectedOption.getAttribute('data-name');
+
+    try {
+      await window.api.saveEventConfig({ eventName, eventPrefix });
+      eventCreated = true;
+      
+      if (selectedFolder) {
+        btnWatch.disabled = false;
+      }
+      updateEmptyState();
+      appendLog({ level: 'info', message: `📂 Switched active event to: "${eventName}" [${eventPrefix}]`, ts: new Date().toISOString() });
+    } catch (err) {
+      alert(`Failed to switch event: ${err.message}`);
+    }
+  });
+}
+
+// ── Create Event Modal ──
+const eventCreateModal   = document.getElementById('event-create-modal');
+const eventCreateTitle   = document.getElementById('event-create-title');
+const eventCreatePrefix  = document.getElementById('event-create-prefix');
+const eventCreateError   = document.getElementById('event-create-error');
+const eventCreateCancel  = document.getElementById('event-create-cancel');
+const eventCreateConfirm = document.getElementById('event-create-confirm');
+
+function openCreateEventModal() {
+  eventCreateError.style.display = 'none';
+  eventCreateError.textContent = '';
+  
+  // Pre-populate fields with currently saved event config if available
+  window.api.getEventConfig().then(config => {
+    eventCreateTitle.value = config.eventName || '';
+    eventCreatePrefix.value = config.eventPrefix || '';
+  }).catch(() => {});
+
+  eventCreateModal.style.display = 'flex';
+  setTimeout(() => eventCreateTitle.focus(), 50);
+}
+
+function closeCreateEventModal() {
+  eventCreateModal.style.display = 'none';
+}
+
+eventCreateCancel.addEventListener('click', closeCreateEventModal);
+eventCreateModal.addEventListener('click', (e) => { if (e.target === eventCreateModal) closeCreateEventModal(); });
+
+eventCreateConfirm.addEventListener('click', async () => {
+  const eventName = eventCreateTitle.value.trim();
+  const eventPrefix = eventCreatePrefix.value.trim().toUpperCase();
 
   if (!eventName || !eventPrefix) {
-    eventModalError.textContent = 'Please fill out both Event Title and Prefix.';
-    eventModalError.style.display = 'block';
+    eventCreateError.textContent = 'Please fill out both Event Title and Prefix.';
+    eventCreateError.style.display = 'block';
     return;
   }
 
-  eventModalError.style.display = 'none';
-  eventModalConfirm.disabled = true;
-  eventModalConfirm.textContent = 'Creating...';
+  eventCreateError.style.display = 'none';
+  eventCreateConfirm.disabled = true;
+  eventCreateConfirm.textContent = 'Creating...';
 
   try {
     await window.api.saveEventConfig({ eventName, eventPrefix });
@@ -661,14 +742,106 @@ eventModalConfirm.addEventListener('click', async () => {
     // Update sidebar display
     updateSidebarEvent(eventName, eventPrefix);
 
-    appendLog({ level: 'info', message: `📅 Event configured: "${eventName}" [${eventPrefix}]`, ts: new Date().toISOString() });
-    closeEventModal();
+    appendLog({ level: 'info', message: `📅 Event created: "${eventName}" [${eventPrefix}]`, ts: new Date().toISOString() });
+    closeCreateEventModal();
   } catch (err) {
-    eventModalError.textContent = `Failed to save: ${err.message}`;
-    eventModalError.style.display = 'block';
+    eventCreateError.textContent = `Failed to save: ${err.message}`;
+    eventCreateError.style.display = 'block';
   } finally {
-    eventModalConfirm.disabled = false;
-    eventModalConfirm.textContent = 'Create';
+    eventCreateConfirm.disabled = false;
+    eventCreateConfirm.textContent = 'Create';
+  }
+});
+
+// ── Select Event Modal ──
+const eventSelectModal   = document.getElementById('event-select-modal');
+const eventSelectDropdown= document.getElementById('event-select-dropdown');
+const eventSelectError   = document.getElementById('event-select-error');
+const eventSelectCancel  = document.getElementById('event-select-cancel');
+const eventSelectConfirm = document.getElementById('event-select-confirm');
+
+async function openSelectEventModal() {
+  eventSelectError.style.display = 'none';
+  eventSelectError.textContent = '';
+  
+  // Populate existing events dropdown from MongoDB
+  try {
+    eventSelectDropdown.innerHTML = '<option value="">-- Choose an Event --</option>';
+    
+    const events = await window.api.getAllEvents();
+    if (events && events.length > 0) {
+      for (const ev of events) {
+        const opt = document.createElement('option');
+        opt.value = ev.eventPrefix;
+        opt.textContent = `${ev.eventName} (${ev.eventPrefix})`;
+        // Store name as data attribute
+        opt.setAttribute('data-name', ev.eventName);
+        eventSelectDropdown.appendChild(opt);
+      }
+    } else {
+      eventSelectDropdown.innerHTML = '<option value="">No existing events in database.</option>';
+    }
+  } catch (err) {
+    console.warn('Failed to load existing events:', err);
+    eventSelectDropdown.innerHTML = '<option value="">Failed to load events.</option>';
+  }
+
+  // Highlight currently active event prefix in dropdown if possible
+  try {
+    const config = await window.api.getEventConfig();
+    if (config.eventPrefix) {
+      eventSelectDropdown.value = config.eventPrefix.toUpperCase();
+    }
+  } catch (_) {}
+
+  eventSelectModal.style.display = 'flex';
+}
+
+function closeSelectEventModal() {
+  eventSelectModal.style.display = 'none';
+}
+
+eventSelectCancel.addEventListener('click', closeSelectEventModal);
+eventSelectModal.addEventListener('click', (e) => { if (e.target === eventSelectModal) closeSelectEventModal(); });
+
+eventSelectConfirm.addEventListener('click', async () => {
+  const selectedOption = eventSelectDropdown.options[eventSelectDropdown.selectedIndex];
+  if (!selectedOption || !selectedOption.value) {
+    eventSelectError.textContent = 'Please choose a valid event.';
+    eventSelectError.style.display = 'block';
+    return;
+  }
+
+  const eventPrefix = selectedOption.value;
+  const eventName = selectedOption.getAttribute('data-name');
+
+  eventSelectError.style.display = 'none';
+  eventSelectConfirm.disabled = true;
+  eventSelectConfirm.textContent = 'Selecting...';
+
+  try {
+    await window.api.saveEventConfig({ eventName, eventPrefix });
+    eventCreated = true;
+    
+    // Enable watch button if a folder is selected
+    if (selectedFolder) {
+      btnWatch.disabled = false;
+    }
+
+    // Update empty state view
+    updateEmptyState();
+
+    // Update sidebar display
+    updateSidebarEvent(eventName, eventPrefix);
+
+    appendLog({ level: 'info', message: `📂 Switched active event: "${eventName}" [${eventPrefix}]`, ts: new Date().toISOString() });
+    closeSelectEventModal();
+  } catch (err) {
+    eventSelectError.textContent = `Failed to select event: ${err.message}`;
+    eventSelectError.style.display = 'block';
+  } finally {
+    eventSelectConfirm.disabled = false;
+    eventSelectConfirm.textContent = 'Select';
   }
 });
 
@@ -688,6 +861,7 @@ btnWatch.addEventListener('click', async () => {
   if (!selectedFolder) return;
   await window.api.startWatch(selectedFolder);
   isWatching = true;
+  updateSidebarSelectState();
   document.body.classList.add('watching');
   btnWatch.style.display = 'none';
   btnStop.style.display  = 'inline-flex';
@@ -698,6 +872,7 @@ btnWatch.addEventListener('click', async () => {
 btnStop.addEventListener('click', async () => {
   await window.api.stopWatch();
   isWatching = false;
+  updateSidebarSelectState();
   document.body.classList.remove('watching');
   btnStop.style.display  = 'none';
   btnWatch.style.display = 'inline-flex';
@@ -828,10 +1003,13 @@ btnToggleLog.addEventListener('click', () => {
     const eventConfig = await window.api.getEventConfig();
     if (eventConfig && eventConfig.eventName && eventConfig.eventPrefix) {
       eventCreated = true;
-      updateSidebarEvent(eventConfig.eventName, eventConfig.eventPrefix);
+      await updateSidebarEvent(eventConfig.eventName, eventConfig.eventPrefix);
+    } else {
+      await populateSidebarEvents();
     }
   } catch (err) {
     console.warn('Failed to load event config:', err);
+    await populateSidebarEvents();
   }
 
   // Update empty state on startup

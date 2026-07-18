@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('api', {
   // Event Config
   getEventConfig:  ()           => ipcRenderer.invoke('get-event-config'),
   saveEventConfig: (data)       => ipcRenderer.invoke('save-event-config', data),
+  getAllEvents:    ()           => ipcRenderer.invoke('get-all-events'),
 
   // Info / control
   getDbStatus:   ()           => ipcRenderer.invoke('get-db-status'),
