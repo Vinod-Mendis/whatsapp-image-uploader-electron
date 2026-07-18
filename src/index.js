@@ -480,6 +480,8 @@ ipcMain.handle('get-saved-folder', () => {
   return cfg.lastFolder || null;
 });
 
+ipcMain.handle('is-watching', () => watcher !== null);
+
 ipcMain.handle('stop-watch', () => {
   if (watcher) { watcher.close(); watcher = null; }
   if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }

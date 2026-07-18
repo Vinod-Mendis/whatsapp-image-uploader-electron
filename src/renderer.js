@@ -559,6 +559,16 @@ btnToggleLog.addEventListener('click', () => {
     folderPathText.textContent = saved;
     btnWatch.disabled = false;
     appendLog({ level: 'info', message: `📁 Restored folder: ${saved}`, ts: new Date().toISOString() });
+
+    // Sync UI if the backend is already watching the folder (e.g. after a page reload)
+    const isAlreadyWatching = await window.api.isWatching();
+    if (isAlreadyWatching) {
+      isWatching = true;
+      document.body.classList.add('watching');
+      btnWatch.style.display = 'none';
+      btnStop.style.display  = 'inline-flex';
+      appendLog({ level: 'info', message: '👁️  Resumed watching session', ts: new Date().toISOString() });
+    }
   }
 
   updateCardActions();
