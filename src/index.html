@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https:;" />
+    <title>WhatsApp Booth — Photo Booth Uploader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <!-- ── Sidebar ───────────────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-icon">📸</span>
+        <div>
+          <div class="logo-title">WhatsApp Booth</div>
+          <div class="logo-sub">Photo Booth Uploader</div>
+        </div>
+      </div>
+
+      <!-- DB Status -->
+      <div class="status-card" id="db-card">
+        <div class="status-dot" id="db-dot"></div>
+        <div>
+          <div class="status-label">MongoDB</div>
+          <div class="status-value" id="db-status-text">Connecting…</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-num" id="stat-pending">—</div>
+          <div class="stat-lbl">Pending</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num processing" id="stat-processing">—</div>
+          <div class="stat-lbl">Processing</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num success" id="stat-completed">—</div>
+          <div class="stat-lbl">Done</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-num error" id="stat-failed">—</div>
+          <div class="stat-lbl">Failed</div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="sidebar-actions">
+        <button class="btn btn-ghost" id="btn-retry">🔄 Retry Failed</button>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="sidebar-nav">
+        <button class="btn btn-ghost active" id="nav-queue">📸 Photo Queue</button>
+        <button class="btn btn-ghost" id="nav-frames">🖼️ Frames</button>
+      </nav>
+    </aside>
+
+    <!-- ── Main content ──────────────────────────────────────────────── -->
+    <main class="main">
+
+      <!-- Top bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="folder-display" id="folder-display">
+            <span class="folder-icon">📁</span>
+            <span id="folder-path-text">No folder selected</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <button class="btn btn-ghost btn-icon" id="btn-toggle-log" title="Toggle Log">📋 Log</button>
+          <button class="btn btn-secondary" id="btn-select">Choose Folder</button>
+          <button class="btn btn-primary" id="btn-watch" disabled>▶ Start</button>
+          <button class="btn btn-danger"   id="btn-stop"  style="display:none">⏹ Stop</button>
+        </div>
+      </header>
+
+      <!-- Cards grid -->
+      <div class="content-area" id="content-area">
+        <!-- Image queue -->
+        <section class="panel panel-queue" id="panel-queue">
+          <div class="panel-header">
+            <h2>Photo Queue</h2>
+            <!-- Tab switcher -->
+            <div class="tab-switcher" id="tab-switcher">
+              <button class="tab-btn active" data-filter="all">All <span class="tab-count" id="tab-count-all">0</span></button>
+              <button class="tab-btn" data-filter="sent">✅ Sent <span class="tab-count" id="tab-count-sent">0</span></button>
+              <button class="tab-btn" data-filter="not-sent">⏳ Not Sent <span class="tab-count" id="tab-count-not-sent">0</span></button>
+            </div>
+            <span class="badge" id="queue-count" style="display:none">0</span>
+          </div>
+          <!-- Search bar -->
+          <div class="search-bar">
+            <span class="search-icon">🔍</span>
+            <input
+              type="text"
+              id="search-input"
+              class="search-input"
+              placeholder="Search by photo ID or phone…"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button class="search-clear" id="search-clear" style="display:none">✕</button>
+          </div>
+          <div class="queue-list" id="queue-list">
+            <div class="empty-state">
+              <div class="empty-icon">🖼️</div>
+              <p>Waiting for images…<br/>Start watching a folder to begin.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Frames Panel -->
+        <section class="panel panel-frames" id="panel-frames" style="display: none;">
+          <div class="panel-header">
+            <h2>Frame Management</h2>
+            <button class="btn btn-primary" id="btn-upload-frame">➕ Upload Frame</button>
+          </div>
+          <div class="frames-list" id="frames-list">
+            <!-- Frames will be rendered here -->
+          </div>
+        </section>
+
+
+        <!-- Live log (hidden by default) -->
+        <section class="panel panel-log" id="panel-log">
+          <div class="panel-header">
+            <h2>Live Log</h2>
+            <button class="btn-clear" id="btn-clear-log">Clear</button>
+          </div>
+          <div class="log-output" id="log-output"></div>
+        </section>
+      </div>
+    </main>
+
+    <!-- ── Manual Send Modal ────────────────────────────────────────── -->
+    <div class="modal-overlay" id="manual-modal" style="display:none">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2 class="modal-title">📲 Send Photo Manually</h2>
+          <button class="modal-close" id="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-preview-wrap">
+            <img id="modal-preview-img" class="modal-preview-img" src="" alt="Preview" />
+          </div>
+          <div class="modal-photo-id">Photo ID: <strong id="modal-photo-id-text">—</strong></div>
+          <label class="modal-label" for="modal-phone">WhatsApp Number</label>
+          <div class="modal-input-wrap">
+            <span class="modal-input-prefix">📱</span>
+            <input
+              id="modal-phone"
+              type="tel"
+              class="modal-input"
+              placeholder="+94 77 123 4567"
+              autocomplete="tel"
+            />
+          </div>
+          <div class="modal-error" id="modal-error" style="display:none"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
+          <button class="btn btn-primary" id="modal-send">✨ Upload &amp; Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Script must come AFTER all HTML so getElementById never returns null -->
+    <script src="renderer.js"></script>
+  </body>
+</html>
+
