@@ -144,13 +144,19 @@ body { display: flex; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: auto;
   -webkit-app-region: no-drag;
 }
 .sidebar-nav .btn-ghost.active {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
+}
+
+.sidebar-divider {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0;
+  -webkit-app-region: no-drag;
 }
 
 /* ─── Main ────────────────────────────────────────────────────────────── */
@@ -217,6 +223,7 @@ body { display: flex; }
   flex-direction: column;
   border-right: 1px solid var(--border);
   overflow: hidden;
+  min-height: 0;
 }
 /* Log panel: hidden by default */
 .panel-log {
@@ -511,10 +518,10 @@ body { display: flex; }
 }
 
 /* ─── Scrollbars ──────────────────────────────────────────────────────── */
-::-webkit-scrollbar            { width: 5px; }
+::-webkit-scrollbar            { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track      { background: transparent; }
-::-webkit-scrollbar-thumb      { background: var(--border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover{ background: var(--border-glow); }
+::-webkit-scrollbar-thumb      { background: var(--border-glow); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover{ background: var(--text-muted); }
 
 /* ─── Watcher active pulse ────────────────────────────────────────────── */
 @keyframes pulse {

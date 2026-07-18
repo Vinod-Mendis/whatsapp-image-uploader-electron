@@ -12,13 +12,6 @@
   <body>
     <!-- ── Sidebar ───────────────────────────────────────────────────── -->
     <aside class="sidebar">
-      <div class="logo">
-        <span class="logo-icon">📸</span>
-        <div>
-          <div class="logo-title">WhatsApp Booth</div>
-          <div class="logo-sub">Photo Booth Uploader</div>
-        </div>
-      </div>
 
       <!-- Active Event Info -->
       <div class="status-card" id="event-active-card" style="border-color: rgba(108,99,255,.25); margin-bottom: 6px; flex-direction: column; align-items: stretch; gap: 8px;">
@@ -30,7 +23,16 @@
           <option value="">-- No Active Event --</option>
           <option value="__create_new__">+ Create New Event...</option>
         </select>
+        <div class="folder-display" id="folder-display">
+          <span class="folder-icon">📁</span>
+          <span id="folder-path-text">No folder selected</span>
+        </div>
+        <button class="btn btn-secondary" id="btn-select">Choose Folder</button>
+        <button class="btn btn-primary" id="btn-watch" disabled>▶ Start</button>
+        <button class="btn btn-danger"   id="btn-stop"  style="display:none">⏹ Stop</button>
       </div>
+
+      <div class="sidebar-spacer" style="flex: 1;"></div>
 
       <!-- DB Status -->
       <div class="status-card" id="db-card">
@@ -66,6 +68,8 @@
         <button class="btn btn-ghost" id="btn-retry">🔄 Retry Failed</button>
       </div>
 
+      <hr class="sidebar-divider" />
+
       <!-- Navigation -->
       <nav class="sidebar-nav">
         <button class="btn btn-ghost active" id="nav-queue">📸 Photo Queue</button>
@@ -79,16 +83,9 @@
       <!-- Top bar -->
       <header class="topbar">
         <div class="topbar-left">
-          <div class="folder-display" id="folder-display">
-            <span class="folder-icon">📁</span>
-            <span id="folder-path-text">No folder selected</span>
-          </div>
         </div>
         <div class="topbar-right">
           <button class="btn btn-ghost btn-icon" id="btn-toggle-log" title="Toggle Log">📋 Log</button>
-          <button class="btn btn-secondary" id="btn-select">Choose Folder</button>
-          <button class="btn btn-primary" id="btn-watch" disabled>▶ Start</button>
-          <button class="btn btn-danger"   id="btn-stop"  style="display:none">⏹ Stop</button>
         </div>
       </header>
 
