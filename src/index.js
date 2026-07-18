@@ -135,6 +135,15 @@ function extractImageId(filePath) {
   return `${prefix}${dateStr}${last4}`;
 }
 
+/** Extract event-specific guest code from image ID (e.g. CMB202607181024 -> CMB1024) */
+function getCodeFromImageId(imageId) {
+  const match = (imageId || '').match(/^([A-Za-z]+)\d{8}(\d{4})$/);
+  if (match) {
+    return `${match[1].toUpperCase()}${match[2]}`;
+  }
+  return imageId;
+}
+
 
 // ── MongoDB ───────────────────────────────────────────────────────────────────
 
@@ -444,11 +453,11 @@ async function processImage(filePath) {
       imageUrl = await uploadToCloudflare(uploadPath, imageId);
       if (tempFile && fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
       
-      // Upsert DB with imageUrl
+      // Upsert DB with imageUrl and code
       doc = await usersCollection.findOneAndUpdate(
         { imageId },
         { 
-          $set: { imageUrl, status: 'uploaded' },
+          $set: { imageUrl, status: 'uploaded', code: getCodeFromImageId(imageId) },
           $setOnInsert: { createdAt: new Date() }
         },
         { returnDocument: 'after', upsert: true }
@@ -905,6 +914,7 @@ ipcMain.handle('manual-send', async (_, { filePath, phone, imageId }) => {
             imageUrl,
             status:      'completed',
             completedAt: new Date(),
+            code:        getCodeFromImageId(imageId),
           },
           $setOnInsert: { imageId, createdAt: new Date() },
         },
