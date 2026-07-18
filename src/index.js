@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeImage, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const dns = require('node:dns');
@@ -640,6 +640,41 @@ ipcMain.handle('get-saved-folder', () => {
 
 ipcMain.handle('get-images', async (_, folderPath) => {
   return await getInitialImages(folderPath);
+});
+
+ipcMain.handle('delete-image', async (_, imageId) => {
+  try {
+    log('info', `🗑️ Deletion requested for image ${imageId}`, imageId);
+
+    // 1. Delete from MongoDB
+    if (usersCollection && dbConnected) {
+      await usersCollection.deleteOne({ imageId });
+      log('info', `💾 Deleted MongoDB record for ${imageId}`, imageId);
+    }
+
+    // 2. Delete file locally (move to trash)
+    const saved = loadConfig().lastFolder;
+    if (saved) {
+      const files = fs.readdirSync(saved);
+      const matchingFiles = files.filter(f => extractImageId(f) === imageId);
+      for (const file of matchingFiles) {
+        const filePath = path.join(saved, file);
+        if (fs.existsSync(filePath)) {
+          await shell.trashItem(filePath);
+          log('info', `🗑️ Moved local file to trash: ${filePath}`, imageId);
+        }
+      }
+    }
+
+    // 3. Remove from retry queue (waitingFiles) in case it was there
+    waitingFiles.delete(imageId);
+
+    return { success: true };
+  } catch (err) {
+    const msg = err.message || String(err);
+    log('error', `❌ Failed to delete image ${imageId}: ${msg}`, imageId);
+    return { success: false, error: msg };
+  }
 });
 
 ipcMain.handle('is-watching', () => watcher !== null);

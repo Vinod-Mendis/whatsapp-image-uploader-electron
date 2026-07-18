@@ -171,6 +171,12 @@ function upsertCard(imageId, status, extra = {}) {
           </span>
         </div>
       </div>
+      <button class="card-delete-btn" title="Delete Photo" id="del-${imageId}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
     `;
 
     // Prepend so newest is at top
@@ -271,6 +277,15 @@ function upsertCard(imageId, status, extra = {}) {
   document.getElementById('tab-count-all').textContent = imageCards.size;
   document.getElementById('tab-count-sent').textContent = completedCount;
   document.getElementById('tab-count-not-sent').textContent = imageCards.size - completedCount;
+
+  // Bind delete button click
+  const deleteBtn = card.querySelector('.card-delete-btn');
+  if (deleteBtn) {
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      openDeleteModal(imageId);
+    };
+  }
 
   // Re-apply current tab filter (in case a card's status changed and needs to be hidden)
   applySearch();
@@ -448,6 +463,91 @@ modalSendBtn.addEventListener('click', async () => {
 // Allow Enter key to submit
 modalPhoneInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') modalSendBtn.click();
+});
+
+// ── Delete Confirmation Modal ───────────────────────────────────────────────────
+
+const deleteModal        = document.getElementById('delete-modal');
+const deletePhotoIdTxt   = document.getElementById('delete-photo-id-text');
+const deleteModalCancel  = document.getElementById('delete-modal-cancel');
+const deleteModalConfirm = document.getElementById('delete-modal-confirm');
+
+let activeDeleteImageId = null;
+
+function openDeleteModal(imageId) {
+  activeDeleteImageId = imageId;
+  deletePhotoIdTxt.textContent = imageId;
+
+  // Populate phone or display 'No user registered'
+  const phone = cardPhones.get(imageId);
+  const phoneTxt = document.getElementById('delete-photo-phone');
+  if (phoneTxt) {
+    phoneTxt.textContent = phone ? `📲 ${phone}` : '❓ No user matched yet';
+  }
+
+  // Populate preview thumbnail
+  const deletePreviewImg = document.getElementById('delete-preview-img');
+  if (deletePreviewImg) {
+    const previewEl = document.getElementById(`cp-${imageId}`);
+    const thumbImg  = previewEl?.querySelector('img');
+    deletePreviewImg.src = thumbImg?.src || '';
+  }
+
+  deleteModal.style.display = 'flex';
+}
+
+function closeDeleteModal() {
+  deleteModal.style.display = 'none';
+  activeDeleteImageId = null;
+}
+
+deleteModalCancel.addEventListener('click', closeDeleteModal);
+deleteModal.addEventListener('click', (e) => { if (e.target === deleteModal) closeDeleteModal(); });
+
+deleteModalConfirm.addEventListener('click', async () => {
+  if (!activeDeleteImageId) return;
+
+  const imageId = activeDeleteImageId;
+  deleteModalConfirm.disabled = true;
+  deleteModalConfirm.textContent = 'Deleting...';
+
+  try {
+    const result = await window.api.deleteImage(imageId);
+    if (result.success) {
+      // Remove card from UI
+      const card = imageCards.get(imageId);
+      if (card) {
+        card.remove();
+        imageCards.delete(imageId);
+        cardFilePaths.delete(imageId);
+        cardPhones.delete(imageId);
+        queueCount--;
+        queueCountBadge.textContent = queueCount;
+      }
+      
+      closeDeleteModal();
+      appendLog({ level: 'info', message: `🗑️ Successfully deleted photo and database record for ${imageId}`, ts: new Date().toISOString() });
+      
+      // Show empty state if queue is now empty
+      if (imageCards.size === 0) {
+        queueList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🖼️</div>
+            <p>Waiting for images…<br/>Start watching a folder to begin.</p>
+          </div>
+        `;
+      }
+      
+      refreshStats();
+    } else {
+      alert(`Failed to delete image: ${result.error || 'Unknown error'}`);
+    }
+  } catch (err) {
+    alert(`Error deleting image: ${err.message}`);
+  } finally {
+    deleteModalConfirm.disabled = false;
+    deleteModalConfirm.textContent = 'Delete';
+  }
 });
 
 // ── Button handlers ───────────────────────────────────────────────────────────

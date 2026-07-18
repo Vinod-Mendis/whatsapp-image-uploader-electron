@@ -9,8 +9,9 @@ contextBridge.exposeInMainWorld('api', {
   getImages:     (folderPath) => ipcRenderer.invoke('get-images', folderPath),
   isWatching:    ()           => ipcRenderer.invoke('is-watching'),
 
-  // Manual send (no DB user)
+  // Manual send / Delete operations
   manualSend:    (data)       => ipcRenderer.invoke('manual-send', data),
+  deleteImage:   (imageId)    => ipcRenderer.invoke('delete-image', imageId),
 
   // Info / control
   getDbStatus:   ()           => ipcRenderer.invoke('get-db-status'),

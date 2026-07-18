@@ -281,6 +281,7 @@ body { display: flex; }
 
 /* Photo grid card */
 .queue-card {
+  position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -815,6 +816,139 @@ body { display: flex; }
   color: var(--text-secondary);
   letter-spacing: .5px;
   text-transform: uppercase;
+}
+
+/* Card Hover Delete Button */
+.card-delete-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background-color: rgba(239, 68, 68, 0.95);
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
+  opacity: 0;
+  transform: translateY(5px);
+  transition: all 0.2s ease;
+  z-index: 6;
+}
+
+.queue-card:hover .card-delete-btn {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.card-delete-btn:hover {
+  transform: scale(1.1);
+  background-color: #ef4444;
+  box-shadow: 0 6px 14px rgba(239, 68, 68, 0.5);
+}
+
+.card-delete-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Delete Button & Warning Text */
+.btn-danger {
+  background: var(--error);
+  color: white;
+  border: 1px solid var(--error);
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.modal-warning-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Redesigned Destructive Confirmation Dialog Box */
+.delete-modal-box {
+  width: 380px !important;
+  background: var(--bg-surface);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(239, 68, 68, 0.15) !important;
+}
+
+.delete-warning-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.warning-icon {
+  font-size: 20px;
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-warning-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.delete-warning-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+}
+
+.delete-preview-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.delete-preview-img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+
+.delete-photo-info {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.delete-photo-info span {
+  color: var(--accent);
+}
+
+.delete-photo-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
 }
 
 

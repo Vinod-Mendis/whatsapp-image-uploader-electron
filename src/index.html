@@ -33,7 +33,7 @@
       <div class="stats-grid">
         <div class="stat-box">
           <div class="stat-num" id="stat-pending">—</div>
-          <div class="stat-lbl">Pending</div>
+          <div class="stat-lbl">Not Sent</div>
         </div>
         <div class="stat-box">
           <div class="stat-num processing" id="stat-processing">—</div>
@@ -41,7 +41,7 @@
         </div>
         <div class="stat-box">
           <div class="stat-num success" id="stat-completed">—</div>
-          <div class="stat-lbl">Done</div>
+          <div class="stat-lbl">Sent</div>
         </div>
         <div class="stat-box">
           <div class="stat-num error" id="stat-failed">—</div>
@@ -170,6 +170,35 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
           <button class="btn btn-primary" id="modal-send">Upload &amp; Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Delete Confirmation Modal ────────────────────────────────── -->
+    <div class="modal-overlay" id="delete-modal" style="display:none">
+      <div class="modal-box delete-modal-box">
+        <div class="modal-body" style="padding: 24px 24px 16px;">
+          <div class="delete-warning-header">
+            <span class="warning-icon">⚠️</span>
+            <div>
+              <h3 class="delete-warning-title">Delete Photo</h3>
+              <p class="delete-warning-desc">This action cannot be undone.</p>
+            </div>
+          </div>
+          
+          <div class="delete-preview-box">
+            <img id="delete-preview-img" class="delete-preview-img" src="" alt="Thumbnail" />
+            <div>
+              <div class="delete-photo-info">Photo ID: <span id="delete-photo-id-text">—</span></div>
+              <div class="delete-photo-sub" id="delete-photo-phone">—</div>
+            </div>
+          </div>
+          
+          <p class="modal-warning-text">This will permanently delete the image from the local watched directory and remove the database tracking record.</p>
+        </div>
+        <div class="modal-footer" style="padding: 0 24px 24px; background: transparent;">
+          <button class="btn btn-secondary" id="delete-modal-cancel">Cancel</button>
+          <button class="btn btn-danger" id="delete-modal-confirm">Delete Photo</button>
         </div>
       </div>
     </div>
