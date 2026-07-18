@@ -493,6 +493,15 @@ modalSendBtn.addEventListener('click', async () => {
   }
 });
 
+// Limit to 10 digits and strip non-digits in real-time
+modalPhoneInput.addEventListener('input', () => {
+  let value = modalPhoneInput.value.replace(/\D/g, '');
+  if (value.length > 10) {
+    value = value.slice(0, 10);
+  }
+  modalPhoneInput.value = value;
+});
+
 // Allow Enter key to submit
 modalPhoneInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') modalSendBtn.click();
