@@ -58,7 +58,7 @@ function statusIcon(status) {
     uploaded:   '☁️',
     completed:  '✅',
     failed:     '❌',
-    'no-match': '❓',
+    'no-match': '⏳',
   };
   return map[status] || '🔲';
 }
@@ -196,10 +196,11 @@ function upsertCard(imageId, status, extra = {}) {
     card = document.createElement('div');
     card.className = `queue-card ${status}`;
 
+    const dbSaved = ['uploaded', 'no-match', 'completed'].includes(status);
+
     card.innerHTML = `
       <div class="card-preview" id="cp-${imageId}">
         <span class="card-preview-ph">🖼️</span>
-        <span class="card-status-badge" id="ci-${imageId}">${statusIcon(status)}</span>
       </div>
       <div class="card-footer">
         <div class="card-id">${formatUserCode(imageId)}</div>
@@ -208,6 +209,9 @@ function upsertCard(imageId, status, extra = {}) {
         <div class="card-status-pill-wrap">
           <span class="status-pill ${status === 'completed' ? 'pill-sent' : 'pill-not-sent'}" id="cpill-${imageId}">
             ${status === 'completed' ? 'Sent' : 'Not Sent'}
+          </span>
+          <span class="status-pill ${dbSaved ? 'pill-db-uploaded' : 'pill-db-pending'}" id="dbpill-${imageId}" style="margin-left: 6px;">
+            ${dbSaved ? 'DB: Saved' : 'DB: Pending'}
           </span>
         </div>
       </div>
@@ -227,8 +231,6 @@ function upsertCard(imageId, status, extra = {}) {
   } else {
     // Update existing
     card.className = `queue-card ${status}`;
-    const badgeEl = document.getElementById(`ci-${imageId}`);
-    if (badgeEl) badgeEl.textContent = statusIcon(status);
     const stepEl = document.getElementById(`cs-${imageId}`);
     if (stepEl) stepEl.textContent = statusLabel(status);
     const pill = document.getElementById(`cpill-${imageId}`);
@@ -241,16 +243,19 @@ function upsertCard(imageId, status, extra = {}) {
         pill.textContent = 'Not Sent';
       }
     }
+    const dbPill = document.getElementById(`dbpill-${imageId}`);
+    if (dbPill) {
+      const dbSaved = ['uploaded', 'no-match', 'completed'].includes(status);
+      dbPill.className = `status-pill ${dbSaved ? 'pill-db-uploaded' : 'pill-db-pending'}`;
+      dbPill.textContent = dbSaved ? 'DB: Saved' : 'DB: Pending';
+    }
   }
 
   // Set preview thumbnail if provided
   if (extra.previewUrl) {
     const previewEl = document.getElementById(`cp-${imageId}`);
     if (previewEl) {
-      // Keep the status badge, replace only the background image
-      const badge = previewEl.querySelector('.card-status-badge');
       previewEl.innerHTML = `<img src="${extra.previewUrl}" alt="Photo preview" class="card-preview-img" />`;
-      if (badge) previewEl.appendChild(badge);
     }
   }
 
@@ -531,7 +536,7 @@ function openDeleteModal(imageId) {
   const phone = cardPhones.get(imageId);
   const phoneTxt = document.getElementById('delete-photo-phone');
   if (phoneTxt) {
-    phoneTxt.textContent = phone ? `📲 ${phone}` : '❓ No user matched yet';
+    phoneTxt.textContent = phone ? `📲 ${phone}` : 'No user matched yet';
   }
 
   // Populate preview thumbnail

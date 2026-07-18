@@ -359,19 +359,6 @@ body { display: flex; }
   to   { opacity: 1; }
 }
 
-/* Status badge overlaid on the photo */
-.card-status-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  font-size: 16px;
-  line-height: 1;
-  background: rgba(13,15,20,.7);
-  border-radius: 6px;
-  padding: 3px 5px;
-  backdrop-filter: blur(4px);
-}
-
 /* Footer below the photo */
 .card-footer {
   padding: 8px 10px 10px;
@@ -410,6 +397,18 @@ body { display: flex; }
   background: rgba(239, 68, 68, 0.1);
   color: var(--error);
   border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.status-pill.pill-db-uploaded {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.status-pill.pill-db-pending {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
 /* Active frame state */
