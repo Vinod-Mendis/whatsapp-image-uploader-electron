@@ -258,7 +258,7 @@ body { display: flex; }
   overflow-y: auto;
   padding: 14px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 240px));
   grid-auto-rows: max-content;
   gap: 16px;
   align-content: start;
@@ -340,6 +340,7 @@ body { display: flex; }
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: top;
   display: block;
   animation: fadeIn .3s ease;
   image-orientation: none; /* Ignore EXIF metadata completely */
