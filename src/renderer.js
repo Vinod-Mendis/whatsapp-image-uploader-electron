@@ -608,6 +608,9 @@ function updateSidebarSelectState() {
   if (sidebarEventSelect) {
     sidebarEventSelect.disabled = isWatching;
   }
+  if (btnSelect) {
+    btnSelect.disabled = isWatching;
+  }
 }
 
 async function populateSidebarEvents() {
@@ -1047,6 +1050,7 @@ btnToggleLog.addEventListener('click', () => {
   }
 
   updateWatchButtonState();
+  updateSidebarSelectState();
   updateCardActions();
   appendLog({ level: 'info', message: '🚀 WhatsApp Booth Uploader ready', ts: new Date().toISOString() });
 })();

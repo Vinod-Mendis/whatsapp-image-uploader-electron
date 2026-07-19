@@ -20,6 +20,7 @@ const { MongoClient } = require('mongodb');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const sharp = require('sharp');
+sharp.cache(false);
 
 // ── Cloudflare R2 client ──────────────────────────────────────────────────────
 const s3 = new S3Client({
@@ -415,6 +416,17 @@ async function processImage(filePath) {
 
     let doc = await usersCollection.findOne({ imageId });
 
+    // Link pre-registration: check if user registered using the short code before the photo was uploaded
+    if (!doc) {
+      const code = getCodeFromImageId(imageId);
+      const shortDoc = await usersCollection.findOne({ imageId: code });
+      if (shortDoc) {
+        log('info', `🔗 Found pre-registered user by code "${code}". Linking to full imageId "${imageId}"...`, imageId);
+        await usersCollection.updateOne({ _id: shortDoc._id }, { $set: { imageId } });
+        doc = await usersCollection.findOne({ imageId });
+      }
+    }
+
     if (doc && doc.status === 'completed') {
       log('info', `⏭️  imageId "${imageId}" already completed — skipping`, imageId);
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -550,7 +562,7 @@ async function getInitialImages(folderPath) {
       if (doc) {
         status = doc.status || 'detected';
       } else {
-        status = 'no-match';
+        status = 'detected';
       }
 
       list.push({
@@ -640,7 +652,12 @@ async function startWatcher(folderPath) {
         const imageId = extractImageId(filePath);
         const doc = dbMap.get(imageId);
 
-        // If file doesn't exist in DB, or it exists but isn't completed, add to retry queue
+        // If file has not been uploaded yet, enqueue it for processing/upload
+        if (!doc || !doc.imageUrl) {
+          enqueueImage(filePath);
+        }
+
+        // If file isn't completed, add to retry queue
         if (!doc || doc.status !== 'completed') {
           waitingFiles.set(imageId, filePath);
         }
@@ -671,6 +688,18 @@ async function startWatcher(folderPath) {
   watcher
     .on('add', (filePath) => {
       if (isImage(filePath)) enqueueImage(filePath);
+    })
+    .on('change', (filePath) => {
+      if (isImage(filePath)) enqueueImage(filePath);
+    })
+    .on('unlink', (filePath) => {
+      for (const [id, pathVal] of waitingFiles.entries()) {
+        if (pathVal === filePath) {
+          waitingFiles.delete(id);
+          log('info', `🗑️ File removed locally: ${path.basename(filePath)} (removed from retry queue)`);
+          break;
+        }
+      }
     })
     .on('error', (err) => log('error', `Watcher error: ${err.message}`));
 }
